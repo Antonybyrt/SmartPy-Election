@@ -13,6 +13,12 @@ def main():
             self.data.userList = set()
             sp.cast(self.data.userList, sp.set[sp.address])
 
+
+        ################################################################
+        ##                      ONLY OWNER FUNCS
+        ################################################################
+
+        
         @sp.entrypoint
         def addUsers(self, addresses: sp.list[sp.address]):
             assert self.data.owner == sp.sender, "ONLY_OWNER"
@@ -38,6 +44,21 @@ def main():
                 self.data.isVotePeriod = False
 
         @sp.entrypoint
+        def resetAllData(self):
+            assert self.data.owner == sp.sender, "ONLY_OWNER"
+            assert self.data.isApplyPeriod == False, "NOT_AVAILABLE_DURING_APPLY_PERIOD"
+            assert self.data.isVotePeriod == False, "NOT_AVAILABLE_DURING_VOTE_PERIOD"
+            self.data.votes = sp.big_map()
+            self.data.results = sp.big_map()
+            self.data.userList = set()
+
+
+        ################################################################
+        ##                      NO RIGHTS FUNCS
+        ################################################################
+        
+
+        @sp.entrypoint
         def applyCandidate(self):
             assert self.data.userList.contains(sp.sender), "NOT_REGISTERED"
             assert not self.data.results.contains(sp.sender), "ALREADY_APPLIED"
@@ -53,6 +74,17 @@ def main():
             assert self.data.isVotePeriod == True, "NOT_A_VOTE_PERIOD"
             self.data.votes[sp.sender] = candidate
             self.data.results[candidate] += 1
+
+            
+        ################################################################
+        ##                          Views
+        ################################################################
+
+
+        @sp.onchain_view
+        def getResults(self) -> sp.big_map[sp.address, sp.nat]:
+            return self.data.results
+            
 
 @sp.add_test()
 def test():
@@ -72,6 +104,7 @@ def test():
 
         scenario.h2("Adding voters")
         election.addUsers([alice.address, bob.address, charlie.address], _sender = owner)
+        scenario.verify(sp.len(election.data.userList) == 3)
 
         scenario.h2("Apply Period")
         election.openOrCloseApplyPeriod(_sender = owner)
@@ -112,3 +145,32 @@ def test():
     
         scenario.verify(election.data.results[alice.address] == 2)
         scenario.verify(election.data.results[bob.address] == 1)
+
+        scenario.h2("Results")
+        scenario.show(election.data.results)
+        scenario.h2("Votes")
+        scenario.show(election.data.votes)
+        scenario.h2("User List")
+        scenario.show(election.data.userList)
+
+    #
+
+        scenario.h2("View Results")
+        result = election.getResults()
+        scenario.show(result)
+
+    #
+
+        scenario.h2("Reset all datas")
+        election.resetAllData(_sender = owner)
+
+        scenario.h2("Results")
+        scenario.show(election.data.results)
+        scenario.h2("Votes")
+        scenario.show(election.data.votes)
+        scenario.h2("User List")
+        scenario.show(election.data.userList)
+
+    #
+
+        scenario.verify(sp.len(election.data.userList) == 0)
